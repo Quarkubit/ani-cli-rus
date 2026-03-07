@@ -1,21 +1,19 @@
-// main.rs
 mod models;
 mod search;
 mod title;
 
 use std::io::{self, Write};
-// ← Убран неиспользуемый импорт: use models::SearchResult;
 
 fn main() {
     let (user_hash, cookies) = match load_config() {
         Ok(cfg) => cfg,
         Err(e) => {
-            eprintln!("❌ Ошибка: {}", e);
+            eprintln!("Ошибка: {}", e);
             return;
         }
     };
 
-    println!("\n🎬 Jutsu CLI\n");
+    println!("\n======== Jutsu CLI ========\n");
 
     loop {
         print!("[1] Поиск  [q] Выход > ");
@@ -37,6 +35,8 @@ fn main() {
 
 fn load_config() -> Result<(String, String), &'static str> {
     Ok((
+        // TODO: избавиться от ручных пееременных, добавить ввод в программе, а лучше
+        // автоматизировать
         std::env::var("JUTSU_USER_HASH").map_err(|_| "Нет JUTSU_USER_HASH")?,
         std::env::var("JUTSU_COOKIES").map_err(|_| "Нет JUTSU_COOKIES")?,
     ))
@@ -50,24 +50,24 @@ fn run_search_flow(user_hash: &str, cookies: &str) {
     let query = query.trim();
 
     if query.is_empty() {
-        println!("→ Пустой запрос\n");
+        println!("Пустой запрос!\n");
         return;
     }
 
     let results = match search::run(query, user_hash, cookies) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("❌ Ошибка поиска: {}\n", e);
+            eprintln!("Ошибка поиска: {}\n", e);
             return;
         }
     };
 
     if results.is_empty() {
-        println!("→ Ничего не найдено\n");
+        println!("Ничего не найдено! Увы :(\n");
         return;
     }
 
-    println!("\n✓ Найдено: {}", results.len());
+    println!("\nОтлично! Найдено: {}", results.len());
     for (i, item) in results.iter().enumerate() {
         println!("{}) {}", i + 1, item.title);
     }
@@ -85,19 +85,19 @@ fn run_search_flow(user_hash: &str, cookies: &str) {
                     play_video(&episode.video_url);
                 }
                 Ok(None) => {
-                    println!("→ Возврат в меню\n");
+                    println!("Возврат в меню\n");
                 }
-                Err(e) => eprintln!("❌ Ошибка: {}\n", e),
+                Err(e) => eprintln!("Ошибка: {}\n", e),
             }
         } else {
-            println!("→ Отменено\n");
+            println!("Отменено\n");
         }
     } else {
-        println!("→ Некорректный ввод\n");
+        println!("Некорректный ввод\n");
     }
 }
 
 #[allow(dead_code)]
 fn play_video(url: &str) {
-    println!("▶  Запуск плеера: {}", url);
+    println!("Запуск плеера: {}", url);
 }
