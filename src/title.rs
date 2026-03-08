@@ -11,7 +11,7 @@ pub fn view(anime: &SearchResult) -> Result<Option<Episode>, String> {
 
     // Загружаем страницу аниме для получения списка серий
     let curl_cmd = format!(
-        "curl -sL '{}' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36' --compressed",
+        "curl -sL '{}' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' --compressed -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8' -H 'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'",
         anime.url
     );
 
@@ -28,15 +28,60 @@ pub fn view(anime: &SearchResult) -> Result<Option<Episode>, String> {
     let body = String::from_utf8_lossy(&output.stdout).to_string();
     let document = Html::parse_document(&body);
 
-    // Ищем элементы с data-episode и data-number
-    let episode_selector = Selector::parse("[data-episode][data-number]").unwrap();
-    
+    // Ищем элементы с сериями - пробуем несколько селекторов
     let mut episodes: Vec<(String, String)> = Vec::new();
     
-    for element in document.select(&episode_selector) {
-        if let Some(episode_id) = element.value().attr("data-episode") {
+    // Селектор 1: data-episode-id и data-number (новый формат)
+    let selector1 = Selector::parse("[data-episode-id][data-number]").unwrap();
+    for element in document.select(&selector1) {
+        if let Some(episode_id) = element.value().attr("data-episode-id") {
             if let Some(episode_num) = element.value().attr("data-number") {
                 episodes.push((episode_id.to_string(), episode_num.to_string()));
+            }
+        }
+    }
+    
+    // Селектор 2: data-episode и data-number (старый формат)
+    if episodes.is_empty() {
+        let selector2 = Selector::parse("[data-episode][data-number]").unwrap();
+        for element in document.select(&selector2) {
+            if let Some(episode_id) = element.value().attr("data-episode") {
+                if let Some(episode_num) = element.value().attr("data-number") {
+                    episodes.push((episode_id.to_string(), episode_num.to_string()));
+                }
+            }
+        }
+    }
+    
+    // Селектор 3: ищем по классу episode-item
+    if episodes.is_empty() {
+        let selector3 = Selector::parse(".episode-item[data-id]").unwrap();
+        for element in document.select(&selector3) {
+            if let Some(episode_id) = element.value().attr("data-id") {
+                // Пытаемся найти номер серии в тексте или атрибуте
+                let episode_num = element.value().attr("data-number")
+                    .or_else(|| element.text().collect::<Vec<_>>().join("").trim().to_string().chars().filter(|c| c.is_ascii_digit()).collect::<String>().as_str())
+                    .unwrap_or(episode_id)
+                    .to_string();
+                episodes.push((episode_id.to_string(), episode_num));
+            }
+        }
+    }
+    
+    // Селектор 4: ищем все ссылки на серии в блоке серий
+    if episodes.is_empty() {
+        let selector4 = Selector::parse("a[href*='/anime/'][href*='/']").unwrap();
+        for element in document.select(&selector4) {
+            if let Some(href) = element.value().attr("href") {
+                // Извлекаем ID серии из URL
+                let parts: Vec<&str> = href.trim_end_matches('/').split('/').collect();
+                if parts.len() >= 3 {
+                    if let Some(episode_id) = parts.last() {
+                        if episode_id.parse::<i32>().is_ok() {
+                            episodes.push((episode_id.to_string(), episode_id.to_string()));
+                        }
+                    }
+                }
             }
         }
     }
@@ -83,7 +128,7 @@ pub fn view(anime: &SearchResult) -> Result<Option<Episode>, String> {
             println!("\nЗагрузка информации о серии {}...", episode_num);
             
             // Пытаемся получить информацию о плеере
-            match get_episode_video_url(&anime_id, episode_id) {
+            match get_episode_video_url(&anime.url, episode_id) {
                 Ok(video_url) => {
                     println!("✓ Видео найдено!");
                     return Ok(Some(Episode {
@@ -131,19 +176,13 @@ fn extract_anime_id(url: &str) -> Result<String, String> {
 }
 
 /// Получает URL видео для серии
-fn get_episode_video_url(anime_id: &str, episode_id: &str) -> Result<String, String> {
+fn get_episode_video_url(anime_url: &str, episode_id: &str) -> Result<String, String> {
     // AnimeGO хранит видео на внешних плеерах (kodik, videocdn, etc.)
-    // Для получения ссылки нужно сделать запрос к API сайта
-    
-    // Пробуем получить страницу серии
-    let schedule_url = format!(
-        "https://animego.me/anime/{}/{}/schedule/load",
-        anime_id, episode_id
-    );
+    // Для получения ссылки нужно загрузить страницу серии и найти iframe
     
     let curl_cmd = format!(
-        "curl -sL '{}' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36' --compressed -H 'X-Requested-With: XMLHttpRequest'",
-        schedule_url
+        "curl -sL '{}' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' --compressed -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8' -H 'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'",
+        anime_url
     );
     
     let output = std::process::Command::new("sh")
@@ -157,6 +196,34 @@ fn get_episode_video_url(anime_id: &str, episode_id: &str) -> Result<String, Str
     // Ищем iframe или source с видео
     if let Some(video_url) = extract_video_url_from_html(&body) {
         return Ok(video_url);
+    }
+    
+    // Пробуем получить страницу через API schedule/load
+    let parts: Vec<&str> = anime_url.trim_end_matches('/').split('/').collect();
+    if let Some(slug) = parts.last() {
+        let id: String = slug.chars().rev().take_while(|c| c.is_ascii_digit()).collect();
+        if !id.is_empty() {
+            let anime_id = id.chars().rev().collect::<String>();
+            let schedule_url = format!(
+                "https://animego.me/anime/{}/{}/schedule/load",
+                anime_id, episode_id
+            );
+            
+            let curl_cmd = format!(
+                "curl -sL '{}' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' --compressed -H 'X-Requested-With: XMLHttpRequest' -H 'Accept: application/json, text/javascript, */*; q=0.01'",
+                schedule_url
+            );
+            
+            if let Ok(output) = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(&curl_cmd)
+                .output() {
+                let body = String::from_utf8_lossy(&output.stdout).to_string();
+                if let Some(video_url) = extract_video_url_from_html(&body) {
+                    return Ok(video_url);
+                }
+            }
+        }
     }
     
     Err("Видео не найдено".to_string())
