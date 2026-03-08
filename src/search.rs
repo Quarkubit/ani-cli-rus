@@ -27,19 +27,26 @@ pub fn run(query: &str) -> Result<Vec<SearchResult>, String> {
     }
 
     let document = Html::parse_document(&body);
-    // Селектор для карточек аниме в результатах поиска
-    let row_selector = Selector::parse("a.card").unwrap();
-    let title_selector = Selector::parse(".card__title, .card-title, h5, .title").unwrap();
+    // Селектор для ссылок на аниме (теперь это просто <a> с href="/anime/..." и title)
+    let link_selector = Selector::parse("a[href^='/anime/'][title]").unwrap();
 
     let mut results = Vec::new();
 
-    for element in document.select(&row_selector) {
+    for element in document.select(&link_selector) {
         if let Some(href) = element.value().attr("href") {
             let href_trimmed = href.trim().to_string();
             
-            // Получаем заголовок
-            let title = if let Some(title_elem) = element.select(&title_selector).next() {
-                title_elem.text().collect::<String>().trim().to_string()
+            // Пропускаем служебные ссылки (онгоинги, сезоны и т.д.)
+            if href_trimmed.starts_with("/anime/status") 
+                || href_trimmed.starts_with("/anime/season")
+                || href_trimmed.starts_with("/anime/random")
+            {
+                continue;
+            }
+
+            // Получаем заголовок из атрибута title
+            let title = if let Some(title_attr) = element.value().attr("title") {
+                title_attr.trim().to_string()
             } else {
                 element.text().collect::<String>().trim().to_string()
             };
