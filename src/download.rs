@@ -18,7 +18,7 @@ pub fn init_download_dir() -> Result<(), String> {
 /// Генерация безопасного имени файла из названия аниме и номера серии
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c.is_cjk() { c } else { '_' })
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c.is_ascii() { c } else { '_' })
         .collect::<String>()
         .trim()
         .to_string()
@@ -443,10 +443,14 @@ pub fn manage_downloaded() -> Result<Option<DownloadedFile>, String> {
             }
             Ok(None)
         }
-        "2" => delete_single_file(),
-        "3" => delete_all_files(),
-        _ => Ok(()),
-    }?;
-
-    Ok(None)
+        "2" => {
+            delete_single_file()?;
+            Ok(None)
+        }
+        "3" => {
+            delete_all_files()?;
+            Ok(None)
+        }
+        _ => Ok(None),
+    }
 }
