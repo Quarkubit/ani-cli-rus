@@ -88,42 +88,47 @@ fn run_search_flow(_user_hash: &str, _cookies: &str) {
         if num > 0 && num <= results.len() {
             let selected = &results[num - 1];
             match title::view(selected) {
-                Ok(Some(episode)) => {
-                    println!("\nДоступные действия:");
-                    println!("1. Смотреть онлайн");
-                    println!("2. Скачать");
-                    println!("0. Отмена");
-                    print!("\nВыбор: ");
-                    io::stdout().flush().unwrap();
-                    
-                    let mut action = String::new();
-                    io::stdin().read_line(&mut action).unwrap();
-                    
-                    match action.trim() {
-                        "1" => {
-                            play_video(&episode.video_url);
-                        }
-                        "2" => {
-                            match download::download_episode(&episode) {
-                                Ok(file) => {
-                                    println!("✓ Файл сохранен: {}", file.file_path);
-                                    print!("Воспроизвести сейчас? (y/n): ");
-                                    io::stdout().flush().unwrap();
-                                    let mut play_now = String::new();
-                                    io::stdin().read_line(&mut play_now).unwrap();
-                                    if play_now.trim().to_lowercase() == "y" {
-                                        download::play_local_file(&file.file_path);
+                Ok(Some(episodes)) => {
+                    // episodes теперь Vec<Episode>
+                    if episodes.len() == 1 {
+                        let episode = &episodes[0];
+                        println!("\nДоступные действия:");
+                        println!("1. Смотреть онлайн");
+                        println!("2. Скачать");
+                        println!("0. Отмена");
+                        print!("\nВыбор: ");
+                        io::stdout().flush().unwrap();
+                        
+                        let mut action = String::new();
+                        io::stdin().read_line(&mut action).unwrap();
+                        
+                        match action.trim() {
+                            "1" => {
+                                play_video(&episode.video_url);
+                            }
+                            "2" => {
+                                match download::download_episode(episode) {
+                                    Ok(file) => {
+                                        println!("✓ Файл сохранен: {}", file.file_path);
+                                        print!("Воспроизвести сейчас? (y/n): ");
+                                        io::stdout().flush().unwrap();
+                                        let mut play_now = String::new();
+                                        io::stdin().read_line(&mut play_now).unwrap();
+                                        if play_now.trim().to_lowercase() == "y" {
+                                            download::play_local_file(&file.file_path);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Ошибка скачивания: {}\n", e);
                                     }
                                 }
-                                Err(e) => {
-                                    eprintln!("Ошибка скачивания: {}\n", e);
-                                }
+                            }
+                            _ => {
+                                println!("Отменено\n");
                             }
                         }
-                        _ => {
-                            println!("Отменено\n");
-                        }
                     }
+                    // Если серий несколько, они уже обработаны в title::view
                 }
                 Ok(None) => {
                     println!("Возврат в меню\n");
@@ -144,7 +149,7 @@ fn play_video(url: &str) {
 }
 
 fn run_downloaded_flow() {
-    match download::select_downloaded() {
+    match download::manage_downloaded() {
         Ok(Some(file)) => {
             download::play_local_file(&file.file_path);
         }
