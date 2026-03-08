@@ -94,6 +94,53 @@ pub fn view(anime: &SearchResult) -> Result<Option<Episode>, String> {
         }
     }
 
+    // Если нашли только часть серий, пробуем загрузить все через AJAX
+    let anime_id = extract_anime_id(&anime.url).unwrap_or_default();
+    if !anime_id.is_empty() && !episodes.is_empty() {
+        // Берем последний episode_id для запроса
+        if let Some((last_episode_id, _)) = episodes.last() {
+            let schedule_url = format!(
+                "https://animego.me/anime/{}/{}/schedule/load",
+                anime_id, last_episode_id
+            );
+            
+            let curl_cmd = format!(
+                "curl -sL '{}' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' --compressed -H 'X-Requested-With: XMLHttpRequest' -H 'Accept: application/json, text/javascript, */*; q=0.01'",
+                schedule_url
+            );
+            
+            if let Ok(output) = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(&curl_cmd)
+                .output() 
+            {
+                let body = String::from_utf8_lossy(&output.stdout).to_string();
+                // Парсим JSON ответ и извлекаем все серии
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                    if let Some(data) = json.get("data").and_then(|d| d.get("content")) {
+                        if let Some(content) = data.as_str() {
+                            let doc = Html::parse_document(content);
+                            let selector = Selector::parse("[data-episode][data-number]").unwrap();
+                            
+                            let mut all_episodes: Vec<(String, String)> = Vec::new();
+                            for element in doc.select(&selector) {
+                                if let Some(ep_id) = element.value().attr("data-episode") {
+                                    if let Some(ep_num) = element.value().attr("data-number") {
+                                        all_episodes.push((ep_id.to_string(), ep_num.to_string()));
+                                    }
+                                }
+                            }
+                            
+                            if !all_episodes.is_empty() {
+                                episodes = all_episodes;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Удаляем дубликаты и сортируем по номеру серии
     episodes.sort_by(|a, b| {
         let num_a: i32 = a.1.parse().unwrap_or(0);
