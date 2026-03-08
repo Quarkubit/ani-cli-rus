@@ -60,7 +60,15 @@ pub fn view(anime: &SearchResult) -> Result<Option<Episode>, String> {
             if let Some(episode_id) = element.value().attr("data-id") {
                 // Пытаемся найти номер серии в тексте или атрибуте
                 let episode_num = element.value().attr("data-number")
-                    .or_else(|| element.text().collect::<Vec<_>>().join("").trim().to_string().chars().filter(|c| c.is_ascii_digit()).collect::<String>().as_str())
+                    .or_else(|| {
+                        let text: String = element.text().collect::<Vec<_>>().join("");
+                        let digits: String = text.trim().chars().filter(|c| c.is_ascii_digit()).collect();
+                        if digits.is_empty() {
+                            None
+                        } else {
+                            Some(digits)
+                        }
+                    })
                     .unwrap_or(episode_id)
                     .to_string();
                 episodes.push((episode_id.to_string(), episode_num));
