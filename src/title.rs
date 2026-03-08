@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use crate::models::{Episode, SearchResult};
 use scraper::{Html, Selector};
 
