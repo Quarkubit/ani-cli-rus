@@ -1,7 +1,8 @@
 [package]
 name = "ani-cli-rus"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-scraper = "*"
+scraper = "0.18"
+urlencoding = "2.1"

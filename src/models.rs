@@ -8,6 +8,15 @@ pub struct SearchResult {
 /// Информация о серии: номер и ссылка на видеопоток
 #[derive(Debug, Clone)]
 pub struct Episode {
-    //pub number: String,
+    pub number: String,
     pub video_url: String,
+    pub anime_title: String,
+}
+
+/// Метаданные скачанного файла
+#[derive(Debug, Clone)]
+pub struct DownloadedFile {
+    pub file_path: String,
+    pub anime_title: String,
+    pub episode_number: String,
 }
